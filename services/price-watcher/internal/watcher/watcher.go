@@ -20,9 +20,9 @@ type Product struct {
 type Alert struct {
 	ID          string  `json:"id"`
 	ProductID   string  `json:"product_id"`
-	TargetPrice float64 `json:"target_price"`
+	TargetPrice float64 `json:"target_price,string"`
 	Email       string  `json:"email"`
-	IsActive    string  `json:"is_active"`
+	IsActive    bool    `json:"is_active"`
 }
 
 type PriceDropEvent struct {
