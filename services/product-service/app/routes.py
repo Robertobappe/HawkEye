@@ -74,7 +74,7 @@ def create_alert(alert: PriceAlertCreate, db: Session = Depends(get_db)):
 
 @router.get("/alerts", response_model=list[PriceAlertResponse])
 def list_alerts(db: Session = Depends(get_db)):
-    return db.query(PriceAlert).filter(PriceAlert.is_active == "true").all()
+    return db.query(PriceAlert).filter(PriceAlert.is_active == True).all()  # noqa: E712
 
 
 @router.delete("/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)

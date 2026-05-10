@@ -190,7 +190,6 @@ HawkEye/
 │   └── ci.yml                    # GitHub Actions CI pipeline
 │
 ├── docker-compose.yml            # Full stack orchestration
-├── .env.example                  # Environment variables template
 └── README.md
 ```
 
