@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Product Service (Python) ────────────────────────────
+  product-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/product-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: pip install ruff && ruff check app/
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # ─── Price Watcher (Go) ─────────────────────────────────
+  price-watcher:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/price-watcher
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build -o price-watcher .
+
+  # ─── Notification Service (Python) ──────────────────────
+  notification-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/notification-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: pip install ruff && ruff check app/
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # ─── Docker Build ────────────────────────────────────────
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [product-service, price-watcher, notification-service]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Product Service
+        run: docker build -t product-service:test ./services/product-service
+
+      - name: Build Price Watcher
+        run: docker build -t price-watcher:test ./services/price-watcher
+
+      - name: Build Notification Service
+        run: docker build -t notification-service:test ./services/notification-service

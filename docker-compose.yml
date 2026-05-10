@@ -1,0 +1,117 @@
+services:
+
+  # ─── Databases ───────────────────────────────────────────
+  product-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: products
+    volumes:
+      - product_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─── Message Broker ──────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Microservices ───────────────────────────────────────
+  product-service:
+    build: ./services/product-service
+    environment:
+      PRODUCT_DATABASE_URL: postgresql://postgres:postgres@product-db:5432/products
+    depends_on:
+      product-db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  price-watcher:
+    build: ./services/price-watcher
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      PRODUCT_SERVICE_URL: http://product-service:8000
+      CHECK_INTERVAL: "30s"
+    depends_on:
+      product-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+
+  notification-service:
+    build: ./services/notification-service
+    environment:
+      NOTIFICATION_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      NOTIFICATION_QUEUE_NAME: price.alerts.notify
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  # ─── API Gateway ─────────────────────────────────────────
+  gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - product-service
+      - price-watcher
+      - notification-service
+
+  # ─── Observability ───────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  product_db_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
